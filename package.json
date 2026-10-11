@@ -1,0 +1,27 @@
+{
+  "name": "champly-assistant",
+  "version": "0.1.0",
+  "description": "Assistant IA personnel de Ben (champly.fr), basé sur l’API Claude",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "brief": "tsx src/jobs/run-morning-brief.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "fastify": "^5.12.5",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
+}
