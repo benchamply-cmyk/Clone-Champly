@@ -39,5 +39,11 @@ export async function startJob(siteUrl: string, job: Job): Promise<void> {
     headers: { authorization: `Bearer ${process.env.ASSISTANT_TOKEN}`, "content-type": "application/json" },
     body: JSON.stringify({ jobId: job.id }),
   });
-  if (res.status !== 202) throw new Error(`Lancement de la tâche refusé (HTTP ${res.status})`);
+  if (res.status !== 202) {
+    const detail = (await res.text()).slice(0, 200);
+    throw new Error(
+      `Lancement de la tâche refusé (HTTP ${res.status}). Vérifie que la fonction « assistant-background » ` +
+        `apparaît dans Netlify (Deploys > Functions) et que ton offre inclut les fonctions d'arrière-plan. ${detail}`,
+    );
+  }
 }
