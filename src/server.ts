@@ -3,13 +3,14 @@ import Fastify from "fastify";
 import { chat } from "./agents/chief.js";
 import { config } from "./config.js";
 import { morningBrief } from "./jobs/morning-brief.js";
+import { fileBackend } from "./memory/file-backend.js";
 import { JsonMemoryStore } from "./memory/store.js";
 
 /**
  * Passerelle HTTP de l'assistant. Canal web pour commencer ; Telegram et le mail
  * se brancheront sur le même point d'entrée chat() quand le canal mobile sera choisi.
  */
-const memory = await new JsonMemoryStore(config.dataDir).load();
+const memory = await new JsonMemoryStore(fileBackend(config.dataDir)).load();
 const app = Fastify({ logger: true });
 
 function authorized(header: string | undefined): boolean {

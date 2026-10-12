@@ -35,14 +35,16 @@ curl -s localhost:3000/api/chat \
   -d '{"message":"Bonjour, je veux lancer un nouveau projet sur champly.fr"}'
 ```
 
-Réutiliser le `conversationId` renvoyé pour continuer la même conversation.
+Réutiliser le `conversationId` renvoyé pour continuer la même conversation. (Sur Netlify, la réponse arrive
+en deux temps : voir « Déployer sur Netlify ».)
 
 ## API
 
 | Méthode | Chemin | Rôle |
 |---|---|---|
-| GET | `/health` | Vérifie que le service tourne (sans jeton) |
-| POST | `/api/chat` | `{ message, conversationId? }` → `{ conversationId, answer }` |
+| GET | `/health` | Vérifie que le service tourne, sans jeton (Netlify : `/api/health`) |
+| POST | `/api/chat` | `{ message, conversationId? }` → `{ conversationId, answer }` (Netlify : `{ jobId, conversationId }`) |
+| GET | `/api/chat/:jobId` | Netlify seulement : état de la tâche et réponse quand elle est prête |
 | GET | `/api/memoire` | Ce que l'assistant sait de Ben : profil, projets, savoir-faire |
 | POST | `/api/memoire/profil/:id/verrou` | `{ locked }` : verrouiller ou déverrouiller un fait |
 | DELETE | `/api/memoire/profil/:id` | Supprimer un fait |
@@ -50,29 +52,37 @@ Réutiliser le `conversationId` renvoyé pour continuer la même conversation.
 | POST | `/api/actions/:id` | `{ approve }` : approuver ou refuser une action |
 | POST | `/api/jobs/briefing-du-matin` | Génère le briefing (à appeler par un cron à 7 h) |
 
-## Déployer
+## Déployer sur Netlify
 
-L'assistant est un serveur Node.js qui tourne en continu et garde sa mémoire sur disque : il ne se publie pas
-sur Netlify (sites statiques et fonctions courtes). Le site champly.fr peut rester sur Netlify, et l'assistant
-tourner à côté sur un sous-domaine, par exemple `api.champly.fr`.
+Tout tourne sur Netlify : la page de discussion (`public/index.html`), l'API en fonctions Netlify
+(`netlify/functions/`) et la mémoire dans Netlify Blobs. Aucun serveur à gérer.
 
-**Sur Render (recommandé pour démarrer)**
+1. Sur app.netlify.com : Add new project > Import an existing project > GitHub > **Clone-Champly**.
+   Netlify lit `netlify.toml` : rien à remplir dans les réglages de build.
+2. Avant le premier déploiement, dans Project configuration > Environment variables, ajouter :
+   - `ANTHROPIC_API_KEY` : ta clé API Claude (console.anthropic.com > API Keys) ;
+   - `ASSISTANT_TOKEN` : un mot de passe long et aléatoire, c'est lui qui protège l'assistant.
+3. Déployer, puis ouvrir l'adresse `.netlify.app` du projet, coller le jeton et écrire à l'assistant.
+4. Domaine : Domain management > Add a domain. Si champly.fr sert déjà un autre site Netlify,
+   utiliser un sous-domaine comme `app.champly.fr` pour ne pas le remplacer.
 
-1. Sur render.com : New > Blueprint, choisir ce dépôt. Render lit `render.yaml`.
-2. Saisir `ANTHROPIC_API_KEY` quand Render la demande. `ASSISTANT_TOKEN` est généré automatiquement
-   (visible dans l'onglet Environment du service).
-3. Une fois le service en ligne, vérifier `https://<nom>.onrender.com/health`.
-4. Dans Render : Settings > Custom Domains > ajouter `api.champly.fr`. Chez le gestionnaire DNS de champly.fr
-   (Netlify DNS si le domaine y est), ajouter l'enregistrement CNAME `api` → `<nom>.onrender.com`.
+**Comment ça tient dans les limites de Netlify.** Une fonction Netlify s'arrête au bout de 30 s, et une réponse
+de l'assistant peut prendre plusieurs minutes. `POST /api/chat` confie donc le travail à la fonction d'arrière-plan
+`assistant-background` (jusqu'à 15 minutes) et renvoie un `jobId` ; la page interroge `GET /api/chat/:jobId`
+jusqu'à la réponse. Le briefing du matin part chaque jour à 5 h UTC (7 h à Paris en été) via `briefing-planifie`.
 
-**Sur un VPS**
+**Limite connue.** La mémoire est un seul document dans Netlify Blobs : une réponse longue qui se termine
+peut écraser une modification faite pendant qu'elle tournait (par exemple une action validée au même moment).
+Sans gravité pour un seul utilisateur ; le passage à PostgreSQL la supprimera.
 
-`docker compose up -d` lance l'assistant sur le port 3000 en local du serveur ; un reverse proxy HTTPS
-(Caddy recommandé) le publie sur le sous-domaine choisi de champly.fr.
+### Ailleurs (serveur Node, VPS)
+
+`npm run build && npm start`, ou `docker compose up -d`, lance la même API avec Fastify (`src/server.ts`)
+et la mémoire dans un fichier sur disque.
 
 ## Prochaines étapes
 
-1. Choisir l'hébergeur et le canal mobile (Telegram recommandé), puis ajouter le canal dans `src/server.ts`.
+1. Choisir le canal mobile (Telegram recommandé) et l'ajouter comme nouvelle route de l'API.
 2. Brancher Gmail et Google Agenda comme outils du secrétaire (lecture + brouillons, envoi après validation).
 3. Exécuter les actions approuvées depuis `POST /api/actions/:id`.
 4. Remplacer le stockage JSON par PostgreSQL + pgvector (`db/schema.sql`) et la recherche sémantique.

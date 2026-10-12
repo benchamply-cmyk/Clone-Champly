@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Champly Assistant</title>
+<style>
+  :root { --bg:#f7f6f3; --card:#fff; --text:#1d1d1b; --muted:#6b6b66; --accent:#2f5d50; --line:#e2e0da; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#171716; --card:#222220; --text:#ecebe6; --muted:#a3a29b; --accent:#7fb8a6; --line:#3a3936; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:760px; margin:0 auto; padding:16px; display:flex; flex-direction:column; min-height:100vh; gap:12px; }
+  h1 { font-size:20px; margin:4px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; }
+  #log { flex:1; display:flex; flex-direction:column; gap:10px; }
+  .msg { white-space:pre-wrap; padding:10px 12px; border-radius:12px; max-width:90%; }
+  .me { align-self:flex-end; background:var(--accent); color:#fff; }
+  .bot { align-self:flex-start; background:var(--card); border:1px solid var(--line); }
+  .muted { color:var(--muted); font-size:14px; }
+  form { display:flex; gap:8px; }
+  textarea, input { flex:1; font:inherit; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--text); }
+  button { font:inherit; padding:10px 14px; border-radius:10px; border:0; background:var(--accent); color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row" style="justify-content:space-between">
+    <h1>Champly Assistant</h1>
+    <div class="row">
+      <button class="ghost" id="actionsBtn" type="button">Actions à valider</button>
+      <button class="ghost" id="newBtn" type="button">Nouvelle conversation</button>
+    </div>
+  </div>
+
+  <section id="login" class="card" hidden>
+    <p>Colle ton jeton d'accès (variable <code>ASSISTANT_TOKEN</code> dans Netlify). Il reste sur cet appareil.</p>
+    <form id="loginForm"><input id="token" type="password" autocomplete="current-password" required><button>Entrer</button></form>
+  </section>
+
+  <section id="actions" class="card" hidden></section>
+  <section id="log" aria-live="polite"></section>
+
+  <form id="chatForm">
+    <textarea id="message" rows="2" placeholder="Écris à ton assistant…" required></textarea>
+    <button id="send">Envoyer</button>
+  </form>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
+};
+let token = store.get("token");
+let conversationId = store.get("conversationId");
+
+function showLogin(show) { $("login").hidden = !show; }
+showLogin(!token);
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(opts.headers || {}) } });
+  if (res.status === 401) { token = null; store.set("token", null); showLogin(true); throw new Error("Jeton refusé"); }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+
+function add(text, who) {
+  const div = document.createElement("div");
+  div.className = `msg ${who}`;
+  div.textContent = text;
+  $("log").append(div);
+  div.scrollIntoView({ behavior: "smooth", block: "end" });
+  return div;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function waitFor(jobId, bubble) {
+  const started = Date.now();
+  while (Date.now() - started < 16 * 60 * 1000) {
+    await sleep(2500);
+    const job = await api(`/api/chat/${jobId}`);
+    if (job.status === "terminé") { bubble.textContent = job.answer; return; }
+    if (job.status === "erreur") { bubble.textContent = `Erreur : ${job.error}`; return; }
+    bubble.textContent = `Je réfléchis… (${Math.round((Date.now() - started) / 1000)} s)`;
+  }
+  bubble.textContent = "Pas de réponse au bout de 16 minutes.";
+}
+
+$("loginForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  token = $("token").value.trim();
+  store.set("token", token);
+  showLogin(false);
+});
+
+$("chatForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!token) return showLogin(true);
+  const message = $("message").value.trim();
+  if (!message) return;
+  $("message").value = "";
+  add(message, "me");
+  const bubble = add("Je réfléchis…", "bot");
+  $("send").disabled = true;
+  try {
+    const { jobId, conversationId: id } = await api("/api/chat", { method: "POST", body: JSON.stringify({ message, conversationId }) });
+    conversationId = id;
+    store.set("conversationId", id);
+    await waitFor(jobId, bubble);
+  } catch (err) {
+    bubble.textContent = `Erreur : ${err.message}`;
+  } finally {
+    $("send").disabled = false;
+  }
+});
+
+$("message").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("chatForm").requestSubmit(); }
+});
+
+$("newBtn").addEventListener("click", () => {
+  conversationId = null;
+  store.set("conversationId", null);
+  $("log").replaceChildren();
+});
+
+$("actionsBtn").addEventListener("click", async () => {
+  const box = $("actions");
+  if (!box.hidden) { box.hidden = true; return; }
+  box.hidden = false;
+  box.textContent = "Chargement…";
+  try {
+    const list = await api("/api/actions");
+    box.replaceChildren();
+    if (!list.length) { box.textContent = "Aucune action en attente."; return; }
+    for (const a of list) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.style.justifyContent = "space-between";
+      const label = document.createElement("span");
+      label.textContent = `${a.kind} : ${a.summary}`;
+      const btns = document.createElement("div");
+      btns.className = "row";
+      for (const [text, approve] of [["Approuver", true], ["Refuser", false]]) {
+        const b = document.createElement("button");
+        b.textContent = text;
+        if (!approve) b.className = "ghost";
+        b.onclick = async () => { await api(`/api/actions/${a.id}`, { method: "POST", body: JSON.stringify({ approve }) }); row.remove(); };
+        btns.append(b);
+      }
+      row.append(label, btns);
+      box.append(row);
+    }
+  } catch (err) {
+    box.textContent = `Erreur : ${err.message}`;
+  }
+});
+</script>
+</body>
+</html>
