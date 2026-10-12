@@ -8,11 +8,27 @@ import { authorized, jobs, json, loadMemory, startJob, type Job } from "../lib/s
  * POST /api/chat lance le travail et renvoie un jobId, puis GET /api/chat/:jobId donne la réponse.
  */
 export default async (req: Request, context: Context) => {
+  try {
+    return await handle(req, context);
+  } catch (err) {
+    // Toujours renvoyer la vraie cause à la page, plutôt qu'une erreur 500 muette.
+    console.error(err);
+    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+};
+
+async function handle(req: Request, context: Context): Promise<Response> {
   const url = new URL(req.url);
   const parts = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
   const route = `${req.method} /${parts[0] ?? ""}`;
 
-  if (route === "GET /health") return json({ ok: true });
+  // Diagnostic sans jeton : dit si les variables sont présentes, jamais leur valeur.
+  if (route === "GET /health")
+    return json({
+      ok: true,
+      cleApiClaude: Boolean(process.env.ANTHROPIC_API_KEY),
+      jetonAssistant: Boolean(process.env.ASSISTANT_TOKEN),
+    });
   if (!authorized(req)) return json({ error: "non autorisé" }, 401);
 
   switch (route) {
@@ -84,6 +100,6 @@ export default async (req: Request, context: Context) => {
     }
   }
   return json({ error: "route inconnue" }, 404);
-};
+}
 
 export const config: Config = { path: "/api/*" };

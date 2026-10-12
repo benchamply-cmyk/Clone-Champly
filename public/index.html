@@ -62,8 +62,13 @@ showLogin(!token);
 
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(opts.headers || {}) } });
-  if (res.status === 401) { token = null; store.set("token", null); showLogin(true); throw new Error("Jeton refusé"); }
-  const data = await res.json();
+  if (res.status === 401) {
+    token = null; store.set("token", null); showLogin(true);
+    throw new Error("Jeton refusé. Vérifie ASSISTANT_TOKEN dans Netlify, puis redéploie le site (les variables ne comptent qu'après un nouveau déploiement).");
+  }
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error(`Réponse inattendue du serveur (HTTP ${res.status}) : ${text.slice(0, 200)}`); }
   if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
   return data;
 }
