@@ -1,6 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 
 /**
  * Les quatre mémoires de l'assistant (voir le document d'architecture) :
@@ -9,7 +7,8 @@ import path from "node:path";
  * - épisodes : le journal horodaté de ce qui s'est dit et fait
  * - savoir-faire : les procédures qui ont marché
  *
- * Ce premier stockage est un fichier JSON pour démarrer sans base de données.
+ * La mémoire est un document JSON, rangé là où le permet l'hébergement :
+ * un fichier sur disque (serveur, VPS) ou Netlify Blobs (fonctions Netlify).
  * L'interface MemoryStore permet de brancher PostgreSQL + pgvector (db/schema.sql)
  * sans toucher au reste du code.
  */
@@ -90,32 +89,27 @@ export interface MemoryStore {
 
 const now = () => new Date().toISOString();
 
+/** Où le document JSON de la mémoire est lu et écrit. */
+export interface MemoryBackend {
+  read(): Promise<string | null>;
+  write(json: string): Promise<void>;
+}
+
 export class JsonMemoryStore implements MemoryStore {
   private data: MemoryData = { profile: [], projects: [], episodes: [], skills: [], pendingActions: [] };
-  private readonly file: string;
   private writing: Promise<void> = Promise.resolve();
 
-  constructor(dataDir: string) {
-    this.file = path.join(dataDir, "memory.json");
-  }
+  constructor(private readonly backend: MemoryBackend) {}
 
   async load(): Promise<this> {
-    await mkdir(path.dirname(this.file), { recursive: true });
-    try {
-      this.data = { ...this.data, ...JSON.parse(await readFile(this.file, "utf8")) };
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    }
+    const raw = await this.backend.read();
+    if (raw) this.data = { ...this.data, ...JSON.parse(raw) };
     return this;
   }
 
-  // Écritures sérialisées et atomiques (fichier temporaire puis renommage).
+  // Écritures sérialisées pour ne jamais mélanger deux sauvegardes.
   private save(): Promise<void> {
-    this.writing = this.writing.then(async () => {
-      const tmp = `${this.file}.tmp`;
-      await writeFile(tmp, JSON.stringify(this.data, null, 2));
-      await rename(tmp, this.file);
-    });
+    this.writing = this.writing.then(() => this.backend.write(JSON.stringify(this.data, null, 2)));
     return this.writing;
   }
 

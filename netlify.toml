@@ -1,0 +1,15 @@
+# Déploiement Netlify : page de discussion (public/) + fonctions (netlify/functions/).
+[build]
+  command = "npm run typecheck"
+  publish = "public"
+
+[functions]
+  node_bundler = "esbuild"
+  directory = "netlify/functions"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
