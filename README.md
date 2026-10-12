@@ -52,9 +52,23 @@ Réutiliser le `conversationId` renvoyé pour continuer la même conversation.
 
 ## Déployer
 
+L'assistant est un serveur Node.js qui tourne en continu et garde sa mémoire sur disque : il ne se publie pas
+sur Netlify (sites statiques et fonctions courtes). Le site champly.fr peut rester sur Netlify, et l'assistant
+tourner à côté sur un sous-domaine, par exemple `api.champly.fr`.
+
+**Sur Render (recommandé pour démarrer)**
+
+1. Sur render.com : New > Blueprint, choisir ce dépôt. Render lit `render.yaml`.
+2. Saisir `ANTHROPIC_API_KEY` quand Render la demande. `ASSISTANT_TOKEN` est généré automatiquement
+   (visible dans l'onglet Environment du service).
+3. Une fois le service en ligne, vérifier `https://<nom>.onrender.com/health`.
+4. Dans Render : Settings > Custom Domains > ajouter `api.champly.fr`. Chez le gestionnaire DNS de champly.fr
+   (Netlify DNS si le domaine y est), ajouter l'enregistrement CNAME `api` → `<nom>.onrender.com`.
+
+**Sur un VPS**
+
 `docker compose up -d` lance l'assistant sur le port 3000 en local du serveur ; un reverse proxy HTTPS
-(Caddy recommandé) le publie sur le sous-domaine choisi de champly.fr. L'hébergeur (OVH, Scaleway ou Hetzner)
-et le sous-domaine restent à valider.
+(Caddy recommandé) le publie sur le sous-domaine choisi de champly.fr.
 
 ## Prochaines étapes
 
