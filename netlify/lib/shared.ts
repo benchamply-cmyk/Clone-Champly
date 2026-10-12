@@ -20,11 +20,14 @@ export const jobs = () => getStore({ name: "taches", consistency: "strong" });
 
 export const loadMemory = () => new JsonMemoryStore(blobsBackend()).load();
 
+// Retire espaces, retours à la ligne et guillemets collés par erreur autour du jeton.
+const clean = (value: string) => value.trim().replace(/^["']|["']$/g, "").trim();
+
 export function authorized(req: Request): boolean {
-  const token = process.env.ASSISTANT_TOKEN;
+  const token = clean(process.env.ASSISTANT_TOKEN ?? "");
   if (!token) return false;
-  const expected = Buffer.from(`Bearer ${token}`);
-  const given = Buffer.from(req.headers.get("authorization") ?? "");
+  const expected = Buffer.from(token);
+  const given = Buffer.from(clean((req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")));
   return given.length === expected.length && timingSafeEqual(given, expected);
 }
 
@@ -36,7 +39,7 @@ export async function startJob(siteUrl: string, job: Job): Promise<void> {
   await jobs().setJSON(job.id, job);
   const res = await fetch(new URL("/.netlify/functions/assistant-background", siteUrl), {
     method: "POST",
-    headers: { authorization: `Bearer ${process.env.ASSISTANT_TOKEN}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${clean(process.env.ASSISTANT_TOKEN ?? "")}`, "content-type": "application/json" },
     body: JSON.stringify({ jobId: job.id }),
   });
   if (res.status !== 202) {

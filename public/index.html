@@ -98,13 +98,18 @@ async function waitFor(jobId, bubble) {
 
 $("loginForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  token = $("token").value.trim();
-  store.set("token", token);
-  showLogin(false);
+  readTokenField();
 });
+
+// Le jeton tapé dans le cadre compte même si « Entrer » n'a pas été cliqué.
+function readTokenField() {
+  const typed = $("token").value.trim().replace(/^["']|["']$/g, "").trim();
+  if (typed) { token = typed; store.set("token", token); showLogin(false); $("token").value = ""; }
+}
 
 $("chatForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  readTokenField();
   if (!token) return showLogin(true);
   const message = $("message").value.trim();
   if (!message) return;
