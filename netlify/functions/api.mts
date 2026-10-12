@@ -28,6 +28,12 @@ async function handle(req: Request, context: Context): Promise<Response> {
       ok: true,
       cleApiClaude: Boolean(process.env.ANTHROPIC_API_KEY),
       jetonAssistant: Boolean(process.env.ASSISTANT_TOKEN),
+      // Avec ?jeton=… : dit seulement si le jeton essayé est le bon, sans jamais révéler l'attendu.
+      ...(url.searchParams.has("jeton") && {
+        jetonEssaye: authorized(new Request(url, { headers: { authorization: `Bearer ${url.searchParams.get("jeton")}` } }))
+          ? "correct"
+          : "différent de ASSISTANT_TOKEN",
+      }),
     });
   if (!authorized(req)) return json({ error: "non autorisé" }, 401);
 
