@@ -1,0 +1,23 @@
+# Service Render de l'assistant : Render > New > Blueprint > dépôt Clone-Champly.
+services:
+  - type: web
+    name: champly-assistant
+    runtime: node
+    plan: starter # le plus petit plan payant : pas de mise en veille, disque possible
+    region: frankfurt
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /var/data
+      - key: ANTHROPIC_API_KEY
+        sync: false # demandée à la création
+      - key: ASSISTANT_TOKEN
+        sync: false # demandée à la création
+    disk:
+      name: memoire
+      mountPath: /var/data
+      sizeGB: 1

@@ -2,9 +2,8 @@ import { chat } from "../agents/chief.js";
 import type { MemoryStore } from "../memory/store.js";
 
 /**
- * Briefing du matin (MVP). Déclenché chaque jour à 7 h par un cron externe
- * (cron système, systemd timer ou planificateur de l'hébergeur) qui appelle
- * POST /api/jobs/briefing-du-matin, ou `npm run brief`.
+ * Briefing du matin (MVP). Lancé chaque jour à 7 h (heure de Ben) par le serveur lui-même,
+ * ou à la demande via POST /api/jobs/briefing-du-matin ou `npm run brief`.
  *
  * Une fois Gmail et Google Agenda branchés, le secrétaire y ajoutera l'agenda
  * du jour et les mails importants.
