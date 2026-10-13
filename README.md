@@ -35,50 +35,38 @@ curl -s localhost:3000/api/chat \
   -d '{"message":"Bonjour, je veux lancer un nouveau projet sur champly.fr"}'
 ```
 
-Réutiliser le `conversationId` renvoyé pour continuer la même conversation. (Sur Netlify, la réponse arrive
-en deux temps : voir « Déployer sur Netlify ».)
+La réponse arrive en deux temps : `POST /api/chat` renvoie un `jobId`, puis `GET /api/chat/:jobId` donne la
+réponse quand elle est prête. Réutiliser le `conversationId` renvoyé pour continuer la même conversation.
 
 ## API
 
 | Méthode | Chemin | Rôle |
 |---|---|---|
-| GET | `/health` | Vérifie que le service tourne, sans jeton (Netlify : `/api/health`) |
-| POST | `/api/chat` | `{ message, conversationId? }` → `{ conversationId, answer }` (Netlify : `{ jobId, conversationId }`) |
-| GET | `/api/chat/:jobId` | Netlify seulement : état de la tâche et réponse quand elle est prête |
+| GET | `/api/health` | Sans jeton : variables présentes ? `?jeton=…` dit si un jeton est le bon |
+| POST | `/api/chat` | `{ message, conversationId? }` → `{ jobId, conversationId }` |
+| GET | `/api/chat/:jobId` | État de la tâche, et la réponse quand elle est prête |
 | GET | `/api/memoire` | Ce que l'assistant sait de Ben : profil, projets, savoir-faire |
-| POST | `/api/memoire/profil/:id/verrou` | `{ locked }` : verrouiller ou déverrouiller un fait |
-| DELETE | `/api/memoire/profil/:id` | Supprimer un fait |
+| POST | `/api/memoire/:id/verrou` | `{ locked }` : verrouiller ou déverrouiller un fait |
+| DELETE | `/api/memoire/:id` | Supprimer un fait |
 | GET | `/api/actions` | Actions en attente de validation |
 | POST | `/api/actions/:id` | `{ approve }` : approuver ou refuser une action |
-| POST | `/api/jobs/briefing-du-matin` | Génère le briefing (à appeler par un cron à 7 h) |
+| POST | `/api/jobs/briefing-du-matin` | Lance le briefing (il part aussi tout seul chaque jour à 7 h, heure de Paris) |
 
-## Déployer sur Netlify
+## Mise en ligne : Netlify + Render
 
-Tout tourne sur Netlify : la page de discussion (`public/index.html`), l'API en fonctions Netlify
-(`netlify/functions/`) et la mémoire dans Netlify Blobs. Aucun serveur à gérer.
+- **Netlify** sert la page `public/index.html` sur champly.fr (offre gratuite) et relaie `/api/*` vers Render
+  (`netlify.toml`).
+- **Render** fait tourner le serveur `src/server.ts` sans limite de durée (`render.yaml`, plan Starter),
+  avec la mémoire dans un fichier sur un disque Render de 1 Go (`/var/data`).
 
-1. Sur app.netlify.com : Add new project > Import an existing project > GitHub > **Clone-Champly**.
-   Netlify lit `netlify.toml` : rien à remplir dans les réglages de build.
-2. Avant le premier déploiement, dans Project configuration > Environment variables, ajouter :
-   - `ANTHROPIC_API_KEY` : ta clé API Claude (console.anthropic.com > API Keys) ;
-   - `ASSISTANT_TOKEN` : un mot de passe long et aléatoire, c'est lui qui protège l'assistant.
-3. Déployer, puis ouvrir l'adresse `.netlify.app` du projet, coller le jeton et écrire à l'assistant.
-4. Domaine : Domain management > Add a domain. Si champly.fr sert déjà un autre site Netlify,
-   utiliser un sous-domaine comme `app.champly.fr` pour ne pas le remplacer.
+1. Render : New > Blueprint > dépôt **Clone-Champly** > Apply. Renseigner `ANTHROPIC_API_KEY`
+   (console.anthropic.com > API Keys) et `ASSISTANT_TOKEN` (le mot de passe de l'assistant).
+2. Vérifier que l'adresse du service est `https://champly-assistant.onrender.com`. Sinon, la reporter
+   dans `netlify.toml`.
+3. Netlify : rien à régler, à part supprimer les anciennes variables (elles ne servent plus).
+4. Tester `https://champly.fr/api/health?jeton=…`, puis écrire à l'assistant sur champly.fr.
 
-**Comment ça tient dans les limites de Netlify.** Une fonction Netlify s'arrête au bout de 30 s, et une réponse
-de l'assistant peut prendre plusieurs minutes. `POST /api/chat` confie donc le travail à la fonction d'arrière-plan
-`assistant-background` (jusqu'à 15 minutes) et renvoie un `jobId` ; la page interroge `GET /api/chat/:jobId`
-jusqu'à la réponse. Le briefing du matin part chaque jour à 5 h UTC (7 h à Paris en été) via `briefing-planifie`.
-
-**Limite connue.** La mémoire est un seul document dans Netlify Blobs : une réponse longue qui se termine
-peut écraser une modification faite pendant qu'elle tournait (par exemple une action validée au même moment).
-Sans gravité pour un seul utilisateur ; le passage à PostgreSQL la supprimera.
-
-### Ailleurs (serveur Node, VPS)
-
-`npm run build && npm start`, ou `docker compose up -d`, lance la même API avec Fastify (`src/server.ts`)
-et la mémoire dans un fichier sur disque.
+`docker compose up -d` lance le même serveur sur n'importe quelle machine.
 
 ## Prochaines étapes
 
